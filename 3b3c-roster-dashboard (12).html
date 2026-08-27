@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3B/3C Roster Tool</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212c; --panel2:#1c2a37; --line:#2a3a48;
+    --text:#e7edf3; --sub:#8fa3b3; --day:#e0a638; --evening:#c98be0; --night:#5b8def; --ori:#3fb6a8;
+    --staff:#7c8ba1; --danger:#d9636c; --good:#3fb67f; --accent:#4fb0d9;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;}
+  .wrap{max-width:1450px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-size:20px;margin:0 0 2px;font-weight:700;letter-spacing:.2px;}
+  .sub{color:var(--sub);font-size:13px;margin-bottom:14px;}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:20px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;}
+  .card .num{font-size:24px;font-weight:700;}
+  .card .lbl{color:var(--sub);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;margin-top:2px;}
+  .card.day .num{color:var(--day);} .card.night .num{color:var(--night);} .card.evening .num{color:var(--evening);}
+  .card.ori .num{color:var(--ori);} .card.total .num{color:var(--accent);}
+  .card.budget .num{color:#c9b6f0;} .card.vac .num{color:var(--danger);}
+  .weekpicker{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  .weekpicker select,.weekpicker button,.weekpicker input{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font-size:13px;}
+  .weekpicker input{width:70px;}
+  .weekpicker button{cursor:pointer;}
+  .weekpicker button:hover{border-color:var(--accent);}
+  .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--line);}
+  .tabBtn{background:none;border:none;color:var(--sub);font-size:14px;font-weight:600;padding:10px 18px;cursor:pointer;border-bottom:2px solid transparent;}
+  .tabBtn.active{color:var(--text);border-bottom:2px solid var(--accent);}
+  .tabBtn:hover{color:var(--text);}
+  .tabPanel{display:none;}
+  .tabPanel.active{display:block;}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:18px;}
+  .panel h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);}
+  .oriList{display:flex;flex-wrap:wrap;gap:8px;}
+  .oriChip{background:var(--panel2);border:1px solid var(--ori);border-radius:20px;padding:5px 10px;font-size:12.5px;display:flex;align-items:center;gap:6px;}
+  .oriChip select{background:transparent;border:none;color:var(--text);font-size:12px;}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;}
+  table{border-collapse:collapse;width:100%;min-width:1200px;}
+  th,td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12.5px;}
+  thead th{position:sticky;top:0;background:var(--panel2);z-index:2;color:var(--sub);font-weight:600;}
+  tbody th{position:sticky;left:0;background:var(--panel);z-index:1;text-align:left;font-weight:500;min-width:190px;}
+  .runrow th,.runrow td{height:28px;padding:4px 8px;font-size:11.5px;position:sticky;}
+  .runrow th{position:sticky;left:0;z-index:4;text-align:left;background:var(--panel2);color:var(--text);font-weight:600;min-width:190px;}
+  .runrow.vac0 th,.runrow.vac0 td{top:0;background:#241a2c;}
+  .runrow.vac1 th,.runrow.vac1 td{top:28px;background:#1f2436;}
+  .runrow.hppd th,.runrow.hppd td{top:56px;background:#182a2e;}
+  .runrow.target th,.runrow.target td{top:84px;background:#1c2a1c;}
+  .runrow.adc th,.runrow.adc td{top:112px;background:#2a2416;}
+  thead tr.datehead th{top:0;}
+  thead.withrun tr.datehead th{top:140px;}
+  .runrow td{text-align:center;color:var(--text);font-weight:600;}
+  .runrow.vac0 td{color:#c9b6f0;}
+  .runrow.vac1 td{color:var(--danger);}
+  .runrow.hppd td{color:var(--accent);}
+  .runrow.target td{color:var(--good);}
+  .runrow.adc td{color:var(--day);}
+  .grp{background:var(--panel2)!important;color:var(--text);font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.5px;}
+  .grp td,.grp th{position:sticky;left:0;}
+  td.cell{text-align:center;color:var(--sub);}
+  td.active-day{color:var(--day);font-weight:700;}
+  td.active-evening{color:var(--evening);font-weight:700;}
+  td.active-night{color:var(--night);font-weight:700;}
+  td.orientation{color:var(--ori);font-weight:700;font-size:11px;}
+  td.dbl{color:var(--danger);font-weight:700;font-size:11px;}
+  td.today-col,th.today-col{background:rgba(79,176,217,0.08);box-shadow:inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent);}
+  .rowbtns{display:flex;gap:5px;}
+  .rowbtns button{background:none;border:1px solid var(--line);color:var(--sub);border-radius:5px;padding:2px 7px;font-size:11px;cursor:pointer;}
+  .rowbtns button:hover{border-color:var(--accent);color:var(--text);}
+  .rowbtns button.del:hover{border-color:var(--danger);color:var(--danger);}
+  .flagname{color:var(--danger);}
+  .forms{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:820px){.forms{grid-template-columns:1fr;}}
+  .field{margin-bottom:8px;display:flex;flex-direction:column;gap:3px;}
+  .field label{font-size:11.5px;color:var(--sub);}
+  .field input,.field select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;padding:7px 9px;font-size:13px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+  .btnrow{display:flex;gap:8px;margin-top:10px;}
+  .btn{background:var(--accent);border:none;color:#06131c;font-weight:700;padding:8px 14px;border-radius:7px;cursor:pointer;font-size:13px;}
+  .btn.secondary{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:500;}
+  .btn:hover{opacity:.9;}
+  .toggle{cursor:pointer;color:var(--accent);font-size:12.5px;user-select:none;}
+  .archivedTable{opacity:.6;}
+  .note{color:var(--sub);font-size:12px;margin-top:8px;line-height:1.5;}
+  .badge{font-size:10px;padding:2px 6px;border-radius:10px;background:var(--panel2);color:var(--sub);margin-left:6px;}
+  .badge.warn{color:var(--danger);border:1px solid var(--danger);}
+  .savebar{color:var(--sub);font-size:11.5px;text-align:right;margin-top:6px;}
+  .synced{color:var(--good);font-size:11.5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>3B/3C Roster Tool</h1>
+  <div class="sub">RN, CA, and LPN roster tracking, synced to Supabase (Digital_Whiteboard project). HPPD blends all three roles but only displays on the RN tab. FTE is per-person and editable — not assumed to be 0.9.</div>
+
+  <div class="weekpicker">
+    <span>Viewing week of</span>
+    <select id="weekSelect"></select>
+    <button id="jumpToday">Jump to current week</button>
+    <button id="syncCC" style="margin-left:6px;">Sync from Command Center</button>
+    <span id="syncStatus" class="synced"></span>
+  </div>
+
+  <div class="tabs">
+    <button class="tabBtn active" data-tab="rn">RN</button>
+    <button class="tabBtn" data-tab="ca">CA</button>
+    <button class="tabBtn" data-tab="lpn">LPN</button>
+    <button class="tabBtn" data-tab="daily">Daily Data</button>
+  </div>
+
+  <!-- RN TAB -->
+  <div class="tabPanel active" id="tab-rn">
+    <div class="weekpicker">
+      <span>Budgeted RN FTE:</span>
+      <input id="budgetedInput" type="number" step="0.1">
+      <span style="margin-left:6px;">Avg Daily Census (fallback, before any history exists):</span>
+      <input id="censusInput" type="number" step="1">
+      <span style="margin-left:6px;">Target HPPD:</span>
+      <input id="targetHppdInput" type="number" step="0.01">
+      <button id="saveBudget">Save</button>
+    </div>
+
+    <div class="cards" id="summaryCardsRN"></div>
+
+    <div class="panel">
+      <h2>In Orientation This Week (excluded from RN counts above)</h2>
+      <div class="oriList" id="oriList"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Non-Productive — On DBL This Week (excluded from RN counts above)</h2>
+      <div class="oriList" id="dblListRN"></div>
+    </div>
+
+    <div class="panel">
+      <h2>RN Roster Grid <span class="toggle" id="toggleArchived" style="float:right">Show archived / ended ▾</span></h2>
+      <div class="tablewrap"><table id="rosterTableRN"></table></div>
+      <div class="note">The rows pinned above the dates track the whole timeline: vacancy % without travelers, vacancy % with travelers (both RN-only), HPPD (RN + CA + LPN combined), Target HPPD, and ADC. Cells show each person's FTE once active (e.g. <b>0.9</b>), <b>ORI</b> during a traveler's first 7 days (not counted in RN totals), <b>DBL</b> for anyone on disability leave (also excluded), and blank before start / after end. Travelers past their end date move to Archived automatically. For any week with logged daily data, HPPD and ADC use that actual data; for weeks without it, ADC is forecast from the trailing ~4 weeks of logged days (or the fallback setting if there's no history yet) and HPPD is estimated from FTE using that forecast (1.0 FTE = 40 hrs/week) — an asterisk (*) marks forecast/estimated values.</div>
+    </div>
+
+    <div class="panel" id="archivedPanel" style="display:none;">
+      <h2>Archived / Ended Travelers</h2>
+      <div class="tablewrap archivedTable"><table id="archivedTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h2 id="formTitle">Add Staff RN or Traveler</h2>
+      <div class="forms">
+        <div>
+          <div class="field"><label>Full name</label><input id="f_name" placeholder="Last, First"></div>
+          <div class="row3">
+            <div class="field"><label>Type</label>
+              <select id="f_type"><option value="staff">Staff RN</option><option value="traveler">Traveler RN</option></select>
+            </div>
+            <div class="field"><label>Shift</label>
+              <select id="f_shift"><option value="day">Day</option><option value="evening">Evening</option><option value="night">Night</option></select>
+            </div>
+            <div class="field"><label>FTE</label><input id="f_fte" type="number" step="0.05" value="0.9"></div>
+          </div>
+          <div class="field" id="f_contractWrap"><label>Contract # (travelers only)</label><input id="f_contract" placeholder="e.g. 48195"></div>
+        </div>
+        <div>
+          <div class="row2">
+            <div class="field"><label>Start date</label><input id="f_start" type="date"></div>
+            <div class="field"><label>End date (leave blank if unknown/ongoing)</label><input id="f_end" type="date"></div>
+          </div>
+          <div class="btnrow">
+            <button class="btn" id="saveBtn">Add Person</button>
+            <button class="btn secondary" id="cancelBtn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="savebar" id="saveStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CA TAB -->
+  <div class="tabPanel" id="tab-ca">
+    <div class="cards" id="summaryCardsCA"></div>
+    <div class="panel">
+      <h2>Non-Productive — On DBL This Week</h2>
+      <div class="oriList" id="dblListCA"></div>
+    </div>
+    <div class="panel">
+      <h2>CA Roster Grid</h2>
+      <div class="tablewrap"><table id="rosterTableCA"></table></div>
+      <div class="note">Cells show each person's actual FTE once active (0.25, 0.5, 0.9, etc — not assumed uniform), blank before start / after end.</div>
+    </div>
+    <div class="panel">
+      <h2 id="formTitleCA">Add CA</h2>
+      <div class="forms">
+        <div>
+          <div class="field"><label>Full name</label><input id="ca_name" placeholder="Last, First"></div>
+          <div class="row2">
+            <div class="field"><label>Shift</label>
+              <select id="ca_shift"><option value="day">Day</option><option value="evening">Evening</option><option value="night">Night</option></select>
+            </div>
+            <div class="field"><label>FTE</label><input id="ca_fte" type="number" step="0.05" value="0.9"></div>
+          </div>
+        </div>
+        <div>
+          <div class="row2">
+            <div class="field"><label>Start date</label><input id="ca_start" type="date"></div>
+            <div class="field"><label>End date (leave blank if ongoing)</label><input id="ca_end" type="date"></div>
+          </div>
+          <div class="btnrow">
+            <button class="btn" id="ca_saveBtn">Add CA</button>
+            <button class="btn secondary" id="ca_cancelBtn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="savebar" id="ca_saveStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LPN TAB -->
+  <div class="tabPanel" id="tab-lpn">
+    <div class="cards" id="summaryCardsLPN"></div>
+    <div class="panel">
+      <h2>Non-Productive — On DBL This Week</h2>
+      <div class="oriList" id="dblListLPN"></div>
+    </div>
+    <div class="panel">
+      <h2>LPN Roster Grid</h2>
+      <div class="tablewrap"><table id="rosterTableLPN"></table></div>
+      <div class="note">Cells show each person's actual FTE once active, blank before start / after end.</div>
+    </div>
+    <div class="panel">
+      <h2 id="formTitleLPN">Add LPN</h2>
+      <div class="forms">
+        <div>
+          <div class="field"><label>Full name</label><input id="lpn_name" placeholder="Last, First"></div>
+          <div class="row2">
+            <div class="field"><label>Shift</label>
+              <select id="lpn_shift"><option value="day">Day</option><option value="evening">Evening</option><option value="night">Night</option></select>
+            </div>
+            <div class="field"><label>FTE</label><input id="lpn_fte" type="number" step="0.05" value="0.9"></div>
+          </div>
+        </div>
+        <div>
+          <div class="row2">
+            <div class="field"><label>Start date</label><input id="lpn_start" type="date"></div>
+            <div class="field"><label>End date (leave blank if ongoing)</label><input id="lpn_end" type="date"></div>
+          </div>
+          <div class="btnrow">
+            <button class="btn" id="lpn_saveBtn">Add LPN</button>
+            <button class="btn secondary" id="lpn_cancelBtn" style="display:none;">Cancel Edit</button>
+          </div>
+          <div class="savebar" id="lpn_saveStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DAILY DATA TAB -->
+  <div class="tabPanel" id="tab-daily">
+    <div class="panel">
+      <h2>Add / Edit a Day</h2>
+      <div class="field" style="max-width:220px;"><label>Date</label><input id="dl_date" type="date"></div>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Block</th><th>Total Patients</th><th>Total Nurses + CAs</th></tr></thead>
+        <tbody>
+          <tr><th>0700–1500</th><td class="cell"><input id="dl_pts_0700" type="number" step="1" style="width:70px;"></td><td class="cell"><input id="dl_staff_0700" type="number" step="1" style="width:70px;"></td></tr>
+          <tr><th>1500–1900</th><td class="cell"><input id="dl_pts_1500" type="number" step="1" style="width:70px;"></td><td class="cell"><input id="dl_staff_1500" type="number" step="1" style="width:70px;"></td></tr>
+          <tr><th>1900–2300</th><td class="cell"><input id="dl_pts_1900" type="number" step="1" style="width:70px;"></td><td class="cell"><input id="dl_staff_1900" type="number" step="1" style="width:70px;"></td></tr>
+          <tr><th>2300–0700</th><td class="cell"><input id="dl_pts_2300" type="number" step="1" style="width:70px;"></td><td class="cell"><input id="dl_staff_2300" type="number" step="1" style="width:70px;"></td></tr>
+        </tbody>
+      </table></div>
+      <div class="cards" style="margin-top:14px;">
+        <div class="card budget"><div class="num" id="dl_calcADC">—</div><div class="lbl">Calculated ADC</div></div>
+        <div class="card budget"><div class="num" id="dl_calcHours">—</div><div class="lbl">Calculated Hours Used</div></div>
+        <div class="card vac"><div class="num" id="dl_calcHPPD">—</div><div class="lbl">Calculated Actual HPPD</div></div>
+        <div class="card budget"><div class="num" id="dl_calcTarget">—</div><div class="lbl">Target HPPD</div></div>
+        <div class="card vac"><div class="num" id="dl_calcVariance">—</div><div class="lbl">Variance (Target − Actual)</div></div>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="dl_saveBtn">Add Day</button>
+        <button class="btn secondary" id="dl_cancelBtn" style="display:none;">Cancel Edit</button>
+      </div>
+      <div class="savebar" id="dl_saveStatus"></div>
+      <div class="note">All four rows are required — Patients and Nurses+CAs for every block, every day. ADC is a time-weighted average of patients across the four blocks (8/4/4/8 hours); Hours Used is staff count × block length, summed — the same math as the source spreadsheet. Once a week (Sun–Sat matching the RN grid) has at least one day logged here, the RN tab's HPPD row and card switch from the FTE-based estimate to this actual figure for that week.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Daily Log</h2>
+      <div class="tablewrap"><table id="dailyLogTable"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://itcjlhbdwhhniwwyjrwj.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0Y2psaGJkd2hobml3d3lqcndqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNzg4NTUsImV4cCI6MjEwMjc1NDg1NX0.Oot7_MLXIzuSrb48mPiCOX-Iq8vkZMD7RxVRz_knTXc';
+const CC_URL = 'https://xnsdvdfceflmagfhpycw.supabase.co';
+const CC_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhuc2R2ZGZjZWZsbWFnZmhweWN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTk1NjgsImV4cCI6MjA5NDk5NTU2OH0.UzKZQj4BLxPpH_OCwQR8LyDUeP9YlKn5UtXRFUFaYKA';
+
+const WEEKS = ["2026-08-23","2026-08-30","2026-09-06","2026-09-13","2026-09-20","2026-09-27",
+"2026-10-04","2026-10-11","2026-10-18","2026-10-25","2026-11-01","2026-11-08","2026-11-15",
+"2026-11-22","2026-11-29","2026-12-06","2026-12-13","2026-12-20","2026-12-27","2027-01-03"];
+
+const SHIFTS = ['day','evening','night'];
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+const HOURS_PER_FTE = 40;
+
+function d(s){ if(!s) return null; const p=s.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
+function fmt(s){ const x=d(s); if(!x) return '—'; return (x.getMonth()+1)+'/'+x.getDate()+'/'+String(x.getFullYear()).slice(2); }
+function fmtWeek(s){ const x=d(s); return (x.getMonth()+1)+'/'+String(x.getDate()).padStart(2,'0')+'/'+String(x.getFullYear()).slice(2); }
+function diffDays(a,b){ return Math.round((a-b)/86400000); }
+function fte(p){ return (p.fte===undefined || p.fte===null) ? 0.9 : p.fte; }
+function fmtFTE(v){ return (Math.round(v*100)/100).toString(); }
+
+let DATA = null;
+let editingRN = null, editingCA = null, editingLPN = null;
+
+const SEED = {
+  budgetedFTE: 29.1,
+  avgCensus: 24,
+  targetHPPD: 9.71,
+  ca: [],
+  lpn: [],
+  dailyLog: [],
+  staff: [
+    {id:'s1',name:'Howe, Ashlea',shift:'day',fte:0.9,start:null,end:null,archived:false},
+    {id:'s2',name:'Burkhart, Danielle',shift:'day',fte:0.9,start:null,end:null,archived:false},
+    {id:'s3',name:'Dietrich, Sherry',shift:'day',fte:0.9,start:'2027-01-03',end:null,archived:false,note:'Transfer in'},
+    {id:'s4',name:'Robinson, Miranda',shift:'night',fte:0.9,start:null,end:null,archived:false},
+    {id:'s5',name:'Muller, Laurel',shift:'night',fte:0.9,start:null,end:null,archived:false},
+    {id:'s6',name:'Condame, Robin',shift:'night',fte:0.9,start:null,end:null,archived:false},
+    {id:'s7',name:'Knight, Robin',shift:'night',fte:0.9,start:null,end:null,archived:false},
+    {id:'s8',name:'Caswell, Kaleigh',shift:'night',fte:0.9,start:null,end:'2026-10-03',archived:false},
+    {id:'s9',name:'Jones, Sam',shift:'night',fte:0.9,start:null,end:null,archived:false}
+  ],
+  travelers: [
+    {id:'t1',name:'Hunsinger, Jennifer',shift:'day',fte:0.9,contract:'',start:'2026-05-15',end:'2026-09-24',archived:false,preceptor:''},
+    {id:'t2',name:'Mujnzo, Jennell',shift:'day',fte:0.9,contract:'',start:'2026-06-07',end:'2026-09-05',archived:false,preceptor:''},
+    {id:'t3',name:'Reyes, Maria',shift:'day',fte:0.9,contract:'',start:'2026-06-21',end:'2026-09-19',archived:false,preceptor:''},
+    {id:'t4',name:'Schermerhorn, Megan',shift:'day',fte:0.9,contract:'',start:'2026-06-21',end:'2026-10-01',archived:false,preceptor:''},
+    {id:'t5',name:'Weaver, Casie',shift:'day',fte:0.9,contract:'',start:'2026-05-24',end:'2026-09-05',archived:false,preceptor:''},
+    {id:'t6',name:'Woodruff, Lisa',shift:'day',fte:0.9,contract:'',start:'2026-06-21',end:'2026-10-24',archived:false,preceptor:''},
+    {id:'t7',name:'Morisseau, Tatiana',shift:'day',fte:0.9,contract:'48195',start:'2026-09-13',end:'2026-12-12',archived:false,preceptor:'',note:'Start date corrected from illegible 9/31 entry — confirm'},
+    {id:'t8',name:'McGowan, Sidney',shift:'day',fte:0.9,contract:'48185',start:'2026-09-06',end:'2026-12-05',archived:false,preceptor:''},
+    {id:'t9',name:'Grinmanis, Stephanie',shift:'day',fte:0.9,contract:'42653',start:'2026-09-13',end:'2026-12-12',archived:false,preceptor:''},
+    {id:'t10',name:'Johnson, Dawn',shift:'day',fte:0.9,contract:'48196',start:'2026-09-20',end:'2026-12-19',archived:false,preceptor:''},
+    {id:'t11',name:'Miller, Toni',shift:'day',fte:0.9,contract:'48186',start:null,end:null,archived:false,preceptor:'',note:'Dates missing on original sheet — needs confirmation'},
+    {id:'t12',name:'(Name unknown — contract 42654)',shift:'day',fte:0.9,contract:'42654',start:null,end:null,archived:false,preceptor:'',note:'Name and dates missing on original sheet — needs confirmation'},
+    {id:'t13',name:'Estenor, Earl',shift:'night',fte:0.9,contract:'37015',start:'2026-06-21',end:'2026-12-19',archived:false,preceptor:''},
+    {id:'t14',name:'Hanyon, Sean',shift:'night',fte:0.9,contract:'',start:'2026-05-31',end:'2026-11-07',archived:false,preceptor:''},
+    {id:'t15',name:'Romero, Jonelyn',shift:'night',fte:0.9,contract:'',start:'2026-06-07',end:'2026-09-05',archived:false,preceptor:''},
+    {id:'t16',name:'Shea, Kendra',shift:'night',fte:0.9,contract:'',start:'2026-07-19',end:'2026-10-17',archived:false,preceptor:''},
+    {id:'t17',name:'Wingler, Matthew',shift:'night',fte:0.9,contract:'',start:'2026-04-26',end:'2026-10-24',archived:false,preceptor:''},
+    {id:'t18',name:'Wright, Ciera',shift:'night',fte:0.9,contract:'',start:'2026-06-21',end:'2026-09-19',archived:false,preceptor:''},
+    {id:'t19',name:'Briceno, Ludwing',shift:'night',fte:0.9,contract:'48197',start:'2026-09-13',end:'2026-12-12',archived:false,preceptor:''},
+    {id:'t20',name:'Dukerich, Jillian',shift:'night',fte:0.9,contract:'48188',start:'2026-09-13',end:'2026-12-12',archived:false,preceptor:''},
+    {id:'t21',name:'Finkbeiner, SaVanna',shift:'night',fte:0.9,contract:'48187',start:'2026-09-13',end:'2026-12-12',archived:false,preceptor:''}
+  ]
+};
+
+function sbHeaders(extra){
+  return Object.assign({
+    apikey: SUPABASE_KEY,
+    Authorization: 'Bearer ' + SUPABASE_KEY,
+    'Content-Type': 'application/json'
+  }, extra||{});
+}
+
+async function loadData(){
+  const sync = document.getElementById('syncStatus');
+  try{
+    const res = await fetch(SUPABASE_URL + '/rest/v1/roster_3b3c?id=eq.main&select=data', { headers: sbHeaders() });
+    if(res.ok){
+      const json = await res.json();
+      if(json && json.length>0 && json[0].data){
+        DATA = json[0].data;
+        if(DATA.budgetedFTE === undefined) DATA.budgetedFTE = 29.1;
+        if(DATA.avgCensus === undefined) DATA.avgCensus = 24;
+        if(DATA.targetHPPD === undefined) DATA.targetHPPD = 9.71;
+        if(DATA.ca === undefined) DATA.ca = [];
+        if(DATA.lpn === undefined) DATA.lpn = [];
+        if(DATA.dailyLog === undefined) DATA.dailyLog = [];
+        if(sync) sync.textContent = 'Synced from Supabase';
+        return;
+      }
+    }
+  }catch(e){ /* fall through to seed */ }
+  DATA = JSON.parse(JSON.stringify(SEED));
+  await saveData();
+  if(sync) sync.textContent = 'Initialized in Supabase';
+}
+
+async function saveData(statusElId){
+  const s = statusElId ? document.getElementById(statusElId) : null;
+  const sync = document.getElementById('syncStatus');
+  if(s) s.textContent = 'Saving…';
+  try{
+    const res = await fetch(SUPABASE_URL + '/rest/v1/roster_3b3c?on_conflict=id', {
+      method:'POST',
+      headers: sbHeaders({ Prefer:'resolution=merge-duplicates' }),
+      body: JSON.stringify([{ id:'main', data: DATA, updated_at: new Date().toISOString() }])
+    });
+    if(res.ok){
+      if(s){ s.textContent = 'Saved ✓'; setTimeout(()=>{ if(s.textContent==='Saved ✓') s.textContent=''; },1500); }
+      if(sync) sync.textContent = 'Synced to Supabase';
+    } else {
+      if(s) s.textContent = 'Save failed (server) — changes kept locally only.';
+    }
+  }catch(e){
+    if(s) s.textContent = 'Save failed — check connection. Changes kept locally only.';
+  }
+}
+
+function autoArchive(){
+  DATA.travelers.forEach(t=>{
+    if(t.end && d(t.end) < TODAY && !t.archived){ t.archived = true; }
+  });
+}
+
+function todayISO(){
+  return TODAY.getFullYear()+'-'+String(TODAY.getMonth()+1).padStart(2,'0')+'-'+String(TODAY.getDate()).padStart(2,'0');
+}
+
+async function syncFromCC(){
+  const btn = document.getElementById('syncCC');
+  const sync = document.getElementById('syncStatus');
+  btn.disabled = true;
+  btn.textContent = 'Syncing…';
+  try{
+    const res = await fetch(CC_URL + '/rest/v1/employee_directory_roster?unit=eq.3B%2F3C&role=not.is.null&select=display_name,role,shift,hire_date,status,status_date', {
+      headers: { apikey: CC_KEY, Authorization: 'Bearer ' + CC_KEY }
+    });
+    if(!res.ok){ throw new Error('CC request failed: ' + res.status); }
+    const rows = await res.json();
+    let added = 0, dblCount = 0, termCount = 0, reactivated = 0;
+    const roleArr = { RN: DATA.staff, CA: DATA.ca, LPN: DATA.lpn };
+    rows.forEach(row=>{
+      const arr = roleArr[row.role];
+      if(!arr) return;
+      const existing = arr.find(p=>p.name.trim().toLowerCase() === (row.display_name||'').trim().toLowerCase());
+      if(!existing){
+        if(row.status === 'terminated') return; // nothing to add
+        const rec = {
+          id: (row.role==='RN'?'s':row.role==='CA'?'c':'l') + '_cc_' + Date.now() + Math.floor(Math.random()*1000),
+          name: row.display_name,
+          shift: row.shift || 'day',
+          fte: 0.9,
+          start: row.hire_date || todayISO(),
+          end: null,
+          archived: false
+        };
+        if(!row.shift) rec.note = 'Shift not set in Command Center — confirm.';
+        if(row.status === 'dbl') rec.dblSince = row.status_date || todayISO();
+        arr.push(rec);
+        added++;
+        if(row.status === 'dbl') dblCount++;
+      } else {
+        if(row.status === 'dbl'){
+          if(!existing.dblSince){ existing.dblSince = row.status_date || todayISO(); dblCount++; }
+        } else if(existing.dblSince){
+          delete existing.dblSince; delete existing.dblUntil; reactivated++;
+        }
+        if(row.status === 'terminated' && !existing.end){
+          existing.end = row.status_date || todayISO();
+          termCount++;
+        }
+      }
+    });
+    await saveData('saveStatus');
+    renderAll();
+    const parts = [];
+    if(added) parts.push(added + ' new hire(s) added');
+    if(dblCount) parts.push(dblCount + ' marked DBL');
+    if(termCount) parts.push(termCount + ' marked terminated');
+    if(reactivated) parts.push(reactivated + ' returned from DBL');
+    sync.textContent = parts.length ? 'Synced from CC: ' + parts.join(', ') : 'Synced from CC: no changes';
+  }catch(e){
+    sync.textContent = 'CC sync failed — ' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Sync from Command Center';
+}
+
+// kind: 'staff' | 'traveler' | 'ca' | 'lpn'. Only travelers get orientation-week logic
+// and only travelers are flagged 'unknown' when start is missing (data-quality flag).
+// Staff/CA/LPN with no start date are treated as always-active (pre-existing employees).
+function personWeekState(p, weekStr, kind){
+  const w = d(weekStr), en = p.end ? d(p.end) : null;
+  if(!p.start){
+    if(kind==='traveler') return {state:'unknown'};
+    if(en && w > en) return {state:'blank'};
+    if(p.dblSince && w >= d(p.dblSince) && (!p.dblUntil || w <= d(p.dblUntil))) return {state:'dbl'};
+    return {state:'active'};
+  }
+  const st = d(p.start);
+  if(w < st) return {state:'blank'};
+  if(en && w > en) return {state:'blank'};
+  if(p.dblSince && w >= d(p.dblSince) && (!p.dblUntil || w <= d(p.dblUntil))) return {state:'dbl'};
+  if(kind==='traveler'){
+    const dd = diffDays(w, st);
+    if(dd < 7) return {state:'orientation'};
+  }
+  return {state:'active'};
+}
+
+function currentWeekIndex(){
+  for(let i=WEEKS.length-1;i>=0;i--){ if(d(WEEKS[i]) <= TODAY) return i; }
+  return 0;
+}
+
+function sumFTE(list, weekStr, kind){
+  const buckets = {day:0, evening:0, night:0};
+  let oriList = [], dblList = [];
+  list.forEach(p=>{
+    if(p.archived) return;
+    const st = personWeekState(p, weekStr, kind);
+    if(st.state==='active'){ buckets[p.shift] = (buckets[p.shift]||0) + fte(p); }
+    if(st.state==='orientation'){ oriList.push(p); }
+    if(st.state==='dbl'){ dblList.push(p); }
+  });
+  buckets.total = buckets.day + buckets.evening + buckets.night;
+  buckets.ori = oriList;
+  buckets.dbl = dblList;
+  return buckets;
+}
+
+function computeSummary(weekStr){
+  const staff = sumFTE(DATA.staff, weekStr, 'staff');
+  const trav = sumFTE(DATA.travelers, weekStr, 'traveler');
+  const ca = sumFTE(DATA.ca||[], weekStr, 'ca');
+  const lpn = sumFTE(DATA.lpn||[], weekStr, 'lpn');
+
+  const rnDay = staff.day + trav.day, rnEvening = staff.evening + trav.evening, rnNight = staff.night + trav.night;
+  const rnTotal = rnDay + rnEvening + rnNight;
+  const staffTotal = staff.total;
+
+  const budget = DATA.budgetedFTE || 0;
+  const vacNoTrav = budget>0 ? ((budget - staffTotal)/budget)*100 : 0;
+  const vacWithTrav = budget>0 ? ((budget - rnTotal)/budget)*100 : 0;
+
+  const adcInfo = weekADCInfo(weekStr);
+  const census = adcInfo.adc || 0;
+  const totalActiveFTE = rnTotal + ca.total + lpn.total;
+  const weeklyHours = totalActiveFTE * HOURS_PER_FTE;
+  const dailyHours = weeklyHours / 7;
+  const hppdEstimate = census>0 ? dailyHours/census : 0;
+
+  const actual = weeklyActualHPPD(weekStr);
+  const hppd = actual!==null ? actual : hppdEstimate;
+  const hppdIsActual = actual!==null;
+
+  const targetHPPD = DATA.targetHPPD || 9.71;
+  const hppdVariance = targetHPPD - hppd; // positive = running under target (leaner), negative = over target
+  const hppdVariancePct = targetHPPD>0 ? (hppdVariance/targetHPPD)*100 : 0;
+
+  return {
+    staffDay:staff.day, staffEvening:staff.evening, staffNight:staff.night,
+    travDay:trav.day, travEvening:trav.evening, travNight:trav.night,
+    ori:trav.ori,
+    totalDay:rnDay, totalEvening:rnEvening, totalNight:rnNight, total:rnTotal,
+    caDay:ca.day, caEvening:ca.evening, caNight:ca.night, caTotal:ca.total,
+    lpnDay:lpn.day, lpnEvening:lpn.evening, lpnNight:lpn.night, lpnTotal:lpn.total,
+    rnDbl:staff.dbl, caDbl:ca.dbl, lpnDbl:lpn.dbl,
+    budget, vacNoTrav, vacWithTrav, hppd, hppdIsActual, targetHPPD, hppdVariance, hppdVariancePct,
+    adc: census, adcIsActual: adcInfo.isActual
+  };
+}
+
+// Average ADC for days actually logged in this week (Sun–Sat), if any.
+// Otherwise forecasts from the trailing 28 logged days before this week (or DATA.avgCensus if no history at all).
+function weekADCInfo(weekStr){
+  const wkStart = d(weekStr);
+  const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate()+6);
+  const days = (DATA.dailyLog||[]).filter(e=>{
+    const dt = d(e.date);
+    return dt >= wkStart && dt <= wkEnd;
+  });
+  if(days.length>0){
+    const avg = days.reduce((a,e)=>a+(+e.adc||0),0)/days.length;
+    return {adc: Math.round(avg*10)/10, isActual:true};
+  }
+  return {adc: forecastADC(weekStr), isActual:false};
+}
+
+function forecastADC(weekStr){
+  const wkStart = d(weekStr);
+  const past = (DATA.dailyLog||[]).filter(e => d(e.date) < wkStart);
+  if(past.length===0) return DATA.avgCensus || 0;
+  const sorted = past.slice().sort((a,b)=> d(b.date)-d(a.date)).slice(0,28); // trailing ~4 weeks
+  const avg = sorted.reduce((s,e)=>s+(+e.adc||0),0)/sorted.length;
+  return Math.round(avg*10)/10;
+}
+
+// Sum of logged daily hours / sum of logged daily ADC for days falling in this week (Sun–Sat).
+// Returns null when no daily log entries exist for the week, so callers can fall back to the FTE estimate.
+function weeklyActualHPPD(weekStr){
+  const wkStart = d(weekStr);
+  const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate()+6);
+  const days = (DATA.dailyLog||[]).filter(e=>{
+    const dt = d(e.date);
+    return dt >= wkStart && dt <= wkEnd;
+  });
+  if(days.length===0) return null;
+  const sumHours = days.reduce((a,e)=>a+(+e.hoursUsed||0),0);
+  const sumADC = days.reduce((a,e)=>a+(+e.adc||0),0);
+  return sumADC>0 ? sumHours/sumADC : 0;
+}
+
+function cardsHTML(cards){
+  return cards.map(c=>`<div class="card ${c[2]}"><div class="num">${c[1]}</div><div class="lbl">${c[0]}</div></div>`).join('');
+}
+
+function renderRNCards(weekStr){
+  const s = computeSummary(weekStr);
+  const cards = [
+    ['Budgeted RN FTE', s.budget.toFixed(1), 'budget'],
+    ['ADC' + (s.adcIsActual ? ' (avg)' : ' (forecast)'), s.adc.toFixed(1), 'budget'],
+    ['Target HPPD', s.targetHPPD.toFixed(2), 'budget'],
+    ['HPPD — This Week' + (s.hppdIsActual ? ' (actual)' : ' (est.)'), s.hppd.toFixed(2), 'vac'],
+    ['HPPD Variance', (s.hppdVariance>=0?'+':'') + s.hppdVariance.toFixed(2), 'vac'],
+    ['Staff RN — Day', fmtFTE(s.staffDay), 'day'],
+    ['Staff RN — Night', fmtFTE(s.staffNight), 'night'],
+    ['Travelers — Day', fmtFTE(s.travDay), 'day'],
+    ['Travelers — Night', fmtFTE(s.travNight), 'night'],
+    ['In Orientation', s.ori.length, 'ori'],
+    ['Total Day Shift', fmtFTE(s.totalDay), 'total'],
+    ['Total Night Shift', fmtFTE(s.totalNight), 'total'],
+    ['Total RN — All', fmtFTE(s.total), 'total'],
+  ];
+  if(s.staffEvening>0 || s.travEvening>0){
+    cards.splice(6,0, ['Total Evening Shift', fmtFTE(s.totalEvening), 'evening']);
+  }
+  document.getElementById('summaryCardsRN').innerHTML = cardsHTML(cards);
+
+  const oriWrap = document.getElementById('oriList');
+  if(s.ori.length===0){
+    oriWrap.innerHTML = '<span class="sub" style="color:var(--sub)">No one is in their orientation week.</span>';
+  } else {
+    oriWrap.innerHTML = s.ori.map(p=>{
+      const staffOpts = DATA.staff.filter(x=>x.shift===p.shift).map(x=>
+        `<option value="${x.id}" ${p.preceptor===x.id?'selected':''}>${x.name}</option>`).join('');
+      return `<div class="oriChip">${p.name} (${p.shift})
+        <select data-precid="${p.id}" class="precSel"><option value="">— assign preceptor —</option>${staffOpts}</select>
+      </div>`;
+    }).join('');
+    oriWrap.querySelectorAll('.precSel').forEach(sel=>{
+      sel.addEventListener('change', async e=>{
+        const id = e.target.getAttribute('data-precid');
+        const t = DATA.travelers.find(x=>x.id===id);
+        t.preceptor = e.target.value;
+        await saveData('saveStatus');
+      });
+    });
+  }
+  renderDblChips('dblListRN', s.rnDbl);
+}
+
+function renderDblChips(containerId, list){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  if(!list || list.length===0){
+    el.innerHTML = '<span class="sub" style="color:var(--sub)">No one is currently on DBL.</span>';
+  } else {
+    el.innerHTML = list.map(p=>`<div class="oriChip" style="border-color:var(--danger);">${p.name} (${p.shift}) — since ${fmt(p.dblSince)}</div>`).join('');
+  }
+}
+
+function renderCACards(weekStr){
+  const s = computeSummary(weekStr);
+  document.getElementById('summaryCardsCA').innerHTML = cardsHTML([
+    ['CA — Day', fmtFTE(s.caDay), 'day'],
+    ['CA — Evening', fmtFTE(s.caEvening), 'evening'],
+    ['CA — Night', fmtFTE(s.caNight), 'night'],
+    ['Total CA FTE', fmtFTE(s.caTotal), 'total'],
+  ]);
+  renderDblChips('dblListCA', s.caDbl);
+}
+function renderLPNCards(weekStr){
+  const s = computeSummary(weekStr);
+  document.getElementById('summaryCardsLPN').innerHTML = cardsHTML([
+    ['LPN — Day', fmtFTE(s.lpnDay), 'day'],
+    ['LPN — Evening', fmtFTE(s.lpnEvening), 'evening'],
+    ['LPN — Night', fmtFTE(s.lpnNight), 'night'],
+    ['Total LPN FTE', fmtFTE(s.lpnTotal), 'total'],
+  ]);
+  renderDblChips('dblListLPN', s.lpnDbl);
+}
+
+function weekCellClass(state, shift){
+  if(state==='orientation') return 'orientation';
+  if(state==='dbl') return 'dbl';
+  if(state==='active') return 'active-'+shift;
+  return 'cell';
+}
+function weekCellText(state, p){
+  if(state==='orientation') return 'ORI';
+  if(state==='dbl') return 'DBL';
+  if(state==='active') return fmtFTE(fte(p));
+  if(state==='unknown') return '?';
+  return '';
+}
+
+function personRow(p, todayIdx, kind){
+  const cells = WEEKS.map((w,i)=>{
+    const st = personWeekState(p, w, kind);
+    return `<td class="cell ${weekCellClass(st.state,p.shift)} ${i===todayIdx?'today-col':''}">${weekCellText(st.state,p)}</td>`;
+  }).join('');
+  const flag = p.note ? `<span class="badge warn" title="${p.note}">check data</span>` : '';
+  const nameCell = `${p.name}${p.contract?` <span class="badge">#${p.contract}</span>`:''}${flag}`;
+  const btns = `<div class="rowbtns">
+      <button data-edit="${p.id}" data-kind="${kind}">Edit</button>
+      ${kind==='traveler'?`<button data-arch="${p.id}">${p.archived?'Restore':'Archive'}</button>`:''}
+      <button data-del="${p.id}" data-kind="${kind}" class="del">Delete</button>
+    </div>`;
+  return `<tr><th>${nameCell}<div style="margin-top:4px">${btns}</div></th>${cells}</tr>`;
+}
+
+function arrByKind(kind){
+  return {staff:DATA.staff, traveler:DATA.travelers, ca:DATA.ca, lpn:DATA.lpn}[kind];
+}
+
+function shiftLabel(sh){ return sh.charAt(0).toUpperCase()+sh.slice(1); }
+
+function renderRNTable(){
+  autoArchive();
+  const todayIdx = currentWeekIndex();
+  const runCell = (val,i) => `<td class="${i===todayIdx?'today-col':''}">${val}</td>`;
+  const vac0Row = `<tr class="runrow vac0"><th>Vacancy % — w/o Travelers</th>${WEEKS.map((w,i)=>runCell(computeSummary(w).vacNoTrav.toFixed(0)+'%',i)).join('')}</tr>`;
+  const vac1Row = `<tr class="runrow vac1"><th>Vacancy % — w/ Travelers</th>${WEEKS.map((w,i)=>runCell(computeSummary(w).vacWithTrav.toFixed(0)+'%',i)).join('')}</tr>`;
+  const hppdRow = `<tr class="runrow hppd"><th>HPPD (RN+CA+LPN)</th>${WEEKS.map((w,i)=>{
+    const cs = computeSummary(w);
+    return runCell(cs.hppd.toFixed(2) + (cs.hppdIsActual ? '' : '*'), i);
+  }).join('')}</tr>`;
+  const targetRow = `<tr class="runrow target"><th>Target HPPD</th>${WEEKS.map((w,i)=>runCell(computeSummary(w).targetHPPD.toFixed(2),i)).join('')}</tr>`;
+  const adcRow = `<tr class="runrow adc"><th>ADC (avg / forecast)</th>${WEEKS.map((w,i)=>{
+    const cs = computeSummary(w);
+    return runCell(cs.adc.toFixed(1) + (cs.adcIsActual ? '' : '*'), i);
+  }).join('')}</tr>`;
+  const dateRow = `<tr class="datehead"><th>Name</th>${WEEKS.map((w,i)=>`<th class="${i===todayIdx?'today-col':''}">${fmtWeek(w)}</th>`).join('')}</tr>`;
+  const head = `<thead class="withrun">${vac0Row}${vac1Row}${hppdRow}${targetRow}${adcRow}${dateRow}</thead>`;
+
+  let body = '';
+  SHIFTS.forEach(sh=>{
+    const staffList = DATA.staff.filter(p=>p.shift===sh);
+    if(staffList.length){
+      body += `<tr class="grp"><th colspan="${WEEKS.length+1}">Staff RN — ${shiftLabel(sh)}</th></tr>`;
+      body += staffList.map(p=>personRow(p,todayIdx,'staff')).join('');
+    }
+  });
+  SHIFTS.forEach(sh=>{
+    const travList = DATA.travelers.filter(p=>p.shift===sh && !p.archived);
+    if(travList.length){
+      body += `<tr class="grp"><th colspan="${WEEKS.length+1}">Travelers — ${shiftLabel(sh)}</th></tr>`;
+      body += travList.map(p=>personRow(p,todayIdx,'traveler')).join('');
+    }
+  });
+
+  document.getElementById('rosterTableRN').innerHTML = head + '<tbody>' + body + '</tbody>';
+
+  const archived = DATA.travelers.filter(p=>p.archived);
+  const ahead = `<thead><tr><th>Name</th><th>Shift</th><th>FTE</th><th>Start</th><th>End</th><th></th></tr></thead>`;
+  const abody = archived.map(p=>`<tr><th>${p.name}${p.contract?` <span class="badge">#${p.contract}</span>`:''}</th>
+      <td class="cell">${p.shift}</td><td class="cell">${fmtFTE(fte(p))}</td><td class="cell">${fmt(p.start)}</td><td class="cell">${fmt(p.end)}</td>
+      <td class="cell"><div class="rowbtns"><button data-arch="${p.id}">Restore</button><button data-del="${p.id}" data-kind="traveler" class="del">Delete</button></div></td></tr>`).join('');
+  document.getElementById('archivedTable').innerHTML = ahead + '<tbody>' + (abody||'<tr><td class="cell" colspan="6">None</td></tr>') + '</tbody>';
+
+  attachRowHandlers('rosterTableRN');
+  attachRowHandlers('archivedTable');
+}
+
+function renderSimpleTable(tableId, list, kind){
+  const todayIdx = currentWeekIndex();
+  const dateRow = `<tr class="datehead"><th>Name</th>${WEEKS.map((w,i)=>`<th class="${i===todayIdx?'today-col':''}">${fmtWeek(w)}</th>`).join('')}</tr>`;
+  const head = `<thead>${dateRow}</thead>`;
+  let body = '';
+  SHIFTS.forEach(sh=>{
+    const shList = list.filter(p=>p.shift===sh);
+    if(shList.length){
+      body += `<tr class="grp"><th colspan="${WEEKS.length+1}">${kind.toUpperCase()} — ${shiftLabel(sh)}</th></tr>`;
+      body += shList.map(p=>personRow(p,todayIdx,kind)).join('');
+    }
+  });
+  document.getElementById(tableId).innerHTML = head + '<tbody>' + body + '</tbody>';
+  attachRowHandlers(tableId);
+}
+
+function renderCATable(){ renderSimpleTable('rosterTableCA', DATA.ca||[], 'ca'); }
+function renderLPNTable(){ renderSimpleTable('rosterTableLPN', DATA.lpn||[], 'lpn'); }
+
+function attachRowHandlers(scopeId){
+  const scope = document.getElementById(scopeId);
+  if(!scope) return;
+  scope.querySelectorAll('[data-edit]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const kind = b.getAttribute('data-kind');
+      const id = b.getAttribute('data-edit');
+      const p = arrByKind(kind).find(x=>x.id===id);
+      if(kind==='ca'){
+        editingCA = {id};
+        document.getElementById('ca_name').value = p.name;
+        document.getElementById('ca_shift').value = p.shift;
+        document.getElementById('ca_fte').value = fte(p);
+        document.getElementById('ca_start').value = p.start || '';
+        document.getElementById('ca_end').value = p.end || '';
+        document.getElementById('formTitleCA').textContent = 'Editing: ' + p.name;
+        document.getElementById('ca_saveBtn').textContent = 'Save Changes';
+        document.getElementById('ca_cancelBtn').style.display = 'inline-block';
+      } else if(kind==='lpn'){
+        editingLPN = {id};
+        document.getElementById('lpn_name').value = p.name;
+        document.getElementById('lpn_shift').value = p.shift;
+        document.getElementById('lpn_fte').value = fte(p);
+        document.getElementById('lpn_start').value = p.start || '';
+        document.getElementById('lpn_end').value = p.end || '';
+        document.getElementById('formTitleLPN').textContent = 'Editing: ' + p.name;
+        document.getElementById('lpn_saveBtn').textContent = 'Save Changes';
+        document.getElementById('lpn_cancelBtn').style.display = 'inline-block';
+      } else {
+        editingRN = {id, kind};
+        document.getElementById('f_name').value = p.name;
+        document.getElementById('f_type').value = kind;
+        document.getElementById('f_shift').value = p.shift;
+        document.getElementById('f_fte').value = fte(p);
+        document.getElementById('f_contract').value = p.contract || '';
+        document.getElementById('f_start').value = p.start || '';
+        document.getElementById('f_end').value = p.end || '';
+        document.getElementById('formTitle').textContent = 'Editing: ' + p.name;
+        document.getElementById('saveBtn').textContent = 'Save Changes';
+        document.getElementById('cancelBtn').style.display = 'inline-block';
+        toggleContractField();
+      }
+      window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+    });
+  });
+  scope.querySelectorAll('[data-del]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const kind = b.getAttribute('data-kind');
+      const id = b.getAttribute('data-del');
+      if(!confirm('Delete this person entirely? This cannot be undone.')) return;
+      const arr = arrByKind(kind);
+      const idx = arr.findIndex(x=>x.id===id);
+      if(idx>-1) arr.splice(idx,1);
+      await saveData('saveStatus');
+      renderAll();
+    });
+  });
+  scope.querySelectorAll('[data-arch]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.getAttribute('data-arch');
+      const p = DATA.travelers.find(x=>x.id===id);
+      p.archived = !p.archived;
+      await saveData('saveStatus');
+      renderAll();
+    });
+  });
+}
+
+function toggleContractField(){
+  document.getElementById('f_contractWrap').style.display = document.getElementById('f_type').value==='traveler' ? 'flex' : 'none';
+}
+
+function renderWeekSelect(){
+  const sel = document.getElementById('weekSelect');
+  sel.innerHTML = WEEKS.map((w,i)=>`<option value="${i}">${fmtWeek(w)}</option>`).join('');
+  sel.value = currentWeekIndex();
+}
+
+function currentWeek(){
+  return WEEKS[+document.getElementById('weekSelect').value];
+}
+
+function renderAll(){
+  const week = currentWeek();
+  renderRNCards(week);
+  renderCACards(week);
+  renderLPNCards(week);
+  renderRNTable();
+  renderCATable();
+  renderLPNTable();
+  renderDailyLog();
+}
+
+document.getElementById('weekSelect').addEventListener('change', ()=>{
+  const week = currentWeek();
+  renderRNCards(week);
+  renderCACards(week);
+  renderLPNCards(week);
+});
+document.getElementById('jumpToday').addEventListener('click', ()=>{
+  document.getElementById('weekSelect').value = currentWeekIndex();
+  const week = currentWeek();
+  renderRNCards(week);
+  renderCACards(week);
+  renderLPNCards(week);
+});
+document.getElementById('syncCC').addEventListener('click', syncFromCC);
+
+document.querySelectorAll('.tabBtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tabBtn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tabPanel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-'+btn.getAttribute('data-tab')).classList.add('active');
+  });
+});
+
+document.getElementById('saveBudget').addEventListener('click', async ()=>{
+  const v = parseFloat(document.getElementById('budgetedInput').value);
+  const c = parseFloat(document.getElementById('censusInput').value);
+  const t = parseFloat(document.getElementById('targetHppdInput').value);
+  if(isNaN(v) || v<=0){ alert('Enter a valid budgeted FTE number.'); return; }
+  if(isNaN(c) || c<=0){ alert('Enter a valid average daily census.'); return; }
+  if(isNaN(t) || t<=0){ alert('Enter a valid target HPPD.'); return; }
+  DATA.budgetedFTE = v;
+  DATA.avgCensus = c;
+  DATA.targetHPPD = t;
+  await saveData('saveStatus');
+  renderAll();
+});
+document.getElementById('f_type').addEventListener('change', toggleContractField);
+document.getElementById('toggleArchived').addEventListener('click', ()=>{
+  const panel = document.getElementById('archivedPanel');
+  const showing = panel.style.display !== 'none';
+  panel.style.display = showing ? 'none' : 'block';
+  document.getElementById('toggleArchived').textContent = showing ? 'Show archived / ended ▾' : 'Hide archived / ended ▴';
+});
+
+document.getElementById('cancelBtn').addEventListener('click', resetRNForm);
+function resetRNForm(){
+  editingRN = null;
+  document.getElementById('f_name').value='';
+  document.getElementById('f_contract').value='';
+  document.getElementById('f_start').value='';
+  document.getElementById('f_end').value='';
+  document.getElementById('f_fte').value='0.9';
+  document.getElementById('formTitle').textContent = 'Add Staff RN or Traveler';
+  document.getElementById('saveBtn').textContent = 'Add Person';
+  document.getElementById('cancelBtn').style.display = 'none';
+}
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('f_name').value.trim();
+  if(!name){ alert('Enter a name.'); return; }
+  const type = document.getElementById('f_type').value;
+  const shift = document.getElementById('f_shift').value;
+  const contract = document.getElementById('f_contract').value.trim();
+  const start = document.getElementById('f_start').value || null;
+  const end = document.getElementById('f_end').value || null;
+  const fteVal = parseFloat(document.getElementById('f_fte').value);
+  if(isNaN(fteVal) || fteVal<=0){ alert('Enter a valid FTE.'); return; }
+
+  if(editingRN){
+    const arr = arrByKind(editingRN.kind);
+    const p = arr.find(x=>x.id===editingRN.id);
+    p.name=name; p.shift=shift; p.start=start; p.end=end; p.fte=fteVal;
+    if(editingRN.kind==='traveler') p.contract=contract;
+    delete p.note;
+  } else {
+    const id = (type==='staff'?'s':'t') + Date.now();
+    if(type==='staff'){
+      DATA.staff.push({id,name,shift,fte:fteVal,start,end,archived:false});
+    } else {
+      DATA.travelers.push({id,name,shift,fte:fteVal,contract,start,end,archived:false,preceptor:''});
+    }
+  }
+  await saveData('saveStatus');
+  resetRNForm();
+  renderAll();
+});
+
+function resetCAForm(){
+  editingCA = null;
+  document.getElementById('ca_name').value='';
+  document.getElementById('ca_start').value='';
+  document.getElementById('ca_end').value='';
+  document.getElementById('ca_fte').value='0.9';
+  document.getElementById('formTitleCA').textContent = 'Add CA';
+  document.getElementById('ca_saveBtn').textContent = 'Add CA';
+  document.getElementById('ca_cancelBtn').style.display = 'none';
+}
+document.getElementById('ca_cancelBtn').addEventListener('click', resetCAForm);
+document.getElementById('ca_saveBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('ca_name').value.trim();
+  if(!name){ alert('Enter a name.'); return; }
+  const shift = document.getElementById('ca_shift').value;
+  const start = document.getElementById('ca_start').value || null;
+  const end = document.getElementById('ca_end').value || null;
+  const fteVal = parseFloat(document.getElementById('ca_fte').value);
+  if(isNaN(fteVal) || fteVal<=0){ alert('Enter a valid FTE.'); return; }
+  if(editingCA){
+    const p = DATA.ca.find(x=>x.id===editingCA.id);
+    p.name=name; p.shift=shift; p.start=start; p.end=end; p.fte=fteVal;
+    delete p.note;
+  } else {
+    DATA.ca.push({id:'c'+Date.now(), name, shift, fte:fteVal, start, end, archived:false});
+  }
+  await saveData('ca_saveStatus');
+  resetCAForm();
+  renderAll();
+});
+
+function resetLPNForm(){
+  editingLPN = null;
+  document.getElementById('lpn_name').value='';
+  document.getElementById('lpn_start').value='';
+  document.getElementById('lpn_end').value='';
+  document.getElementById('lpn_fte').value='0.9';
+  document.getElementById('formTitleLPN').textContent = 'Add LPN';
+  document.getElementById('lpn_saveBtn').textContent = 'Add LPN';
+  document.getElementById('lpn_cancelBtn').style.display = 'none';
+}
+document.getElementById('lpn_cancelBtn').addEventListener('click', resetLPNForm);
+document.getElementById('lpn_saveBtn').addEventListener('click', async ()=>{
+  const name = document.getElementById('lpn_name').value.trim();
+  if(!name){ alert('Enter a name.'); return; }
+  const shift = document.getElementById('lpn_shift').value;
+  const start = document.getElementById('lpn_start').value || null;
+  const end = document.getElementById('lpn_end').value || null;
+  const fteVal = parseFloat(document.getElementById('lpn_fte').value);
+  if(isNaN(fteVal) || fteVal<=0){ alert('Enter a valid FTE.'); return; }
+  if(editingLPN){
+    const p = DATA.lpn.find(x=>x.id===editingLPN.id);
+    p.name=name; p.shift=shift; p.start=start; p.end=end; p.fte=fteVal;
+    delete p.note;
+  } else {
+    DATA.lpn.push({id:'l'+Date.now(), name, shift, fte:fteVal, start, end, archived:false});
+  }
+  await saveData('lpn_saveStatus');
+  resetLPNForm();
+  renderAll();
+});
+
+let editingDaily = null;
+
+const SHIFT_BLOCKS = [
+  {key:'0700', label:'0700–1500'},
+  {key:'1500', label:'1500–1900'},
+  {key:'1900', label:'1900–2300'},
+  {key:'2300', label:'2300–0700'}
+];
+
+function renderDailyLog(){
+  const list = (DATA.dailyLog||[]).slice().sort((a,b)=> d(b.date) - d(a.date));
+  const target = DATA.targetHPPD || 9.71;
+  const blockHeaders = SHIFT_BLOCKS.map(b=>`<th>${b.label}<br><span style="font-weight:400;color:var(--sub);">Pts / Staff</span></th>`).join('');
+  const head = `<thead><tr><th>Date</th><th>ADC</th><th>Hours Used</th><th>Actual HPPD</th><th>Target HPPD</th><th>Variance</th>${blockHeaders}<th></th></tr></thead>`;
+  const body = list.map(e=>{
+    const hppdNum = (+e.adc>0) ? (+e.hoursUsed/+e.adc) : null;
+    const hppdVal = hppdNum!==null ? hppdNum.toFixed(2) : '—';
+    const varianceVal = hppdNum!==null ? ((target-hppdNum)>=0?'+':'') + (target-hppdNum).toFixed(2) : '—';
+    const blocks = (e.blocks||{});
+    const blockCells = SHIFT_BLOCKS.map(b=>{
+      const bl = blocks[b.key] || {};
+      const pts = bl.pts!==undefined && bl.pts!==null && bl.pts!=='' ? bl.pts : '—';
+      const staff = bl.staff!==undefined && bl.staff!==null && bl.staff!=='' ? bl.staff : '—';
+      return `<td class="cell">${pts} / ${staff}</td>`;
+    }).join('');
+    return `<tr><th>${fmt(e.date)}</th><td class="cell">${(+e.adc).toFixed(1)}</td><td class="cell">${e.hoursUsed}</td><td class="cell">${hppdVal}</td><td class="cell">${target.toFixed(2)}</td><td class="cell">${varianceVal}</td>${blockCells}
+      <td class="cell"><div class="rowbtns"><button data-dl-edit="${e.id}">Edit</button><button data-dl-del="${e.id}" class="del">Delete</button></div></td></tr>`;
+  }).join('');
+  document.getElementById('dailyLogTable').innerHTML = head + '<tbody>' + (body || `<tr><td class="cell" colspan="${7+SHIFT_BLOCKS.length}">No days logged yet.</td></tr>`) + '</tbody>';
+
+  document.querySelectorAll('[data-dl-edit]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const id = b.getAttribute('data-dl-edit');
+      const e = DATA.dailyLog.find(x=>x.id===id);
+      editingDaily = id;
+      document.getElementById('dl_date').value = e.date;
+      SHIFT_BLOCKS.forEach(blk=>{
+        const bl = (e.blocks||{})[blk.key] || {};
+        document.getElementById('dl_pts_'+blk.key).value = (bl.pts!==undefined && bl.pts!==null) ? bl.pts : '';
+        document.getElementById('dl_staff_'+blk.key).value = (bl.staff!==undefined && bl.staff!==null) ? bl.staff : '';
+      });
+      updateLiveCalc();
+      document.getElementById('dl_saveBtn').textContent = 'Save Changes';
+      document.getElementById('dl_cancelBtn').style.display = 'inline-block';
+      window.scrollTo({top:0,behavior:'smooth'});
+    });
+  });
+  document.querySelectorAll('[data-dl-del]').forEach(b=>{
+    b.addEventListener('click', async ()=>{
+      const id = b.getAttribute('data-dl-del');
+      if(!confirm('Delete this day\'s entry?')) return;
+      const idx = DATA.dailyLog.findIndex(x=>x.id===id);
+      if(idx>-1) DATA.dailyLog.splice(idx,1);
+      await saveData('dl_saveStatus');
+      renderAll();
+    });
+  });
+}
+
+function readBlocksFromForm(){
+  const blocks = {};
+  let any = false;
+  SHIFT_BLOCKS.forEach(blk=>{
+    const ptsRaw = document.getElementById('dl_pts_'+blk.key).value;
+    const staffRaw = document.getElementById('dl_staff_'+blk.key).value;
+    const pts = ptsRaw==='' ? null : parseFloat(ptsRaw);
+    const staff = staffRaw==='' ? null : parseFloat(staffRaw);
+    if(pts!==null || staff!==null) any = true;
+    blocks[blk.key] = {pts, staff};
+  });
+  return any ? blocks : null;
+}
+
+const BLOCK_HOURS = {'0700':8, '1500':4, '1900':4, '2300':8}; // block lengths sum to 24
+
+// ADC = time-weighted average of patients across the 4 blocks (only if all 4 pts are filled).
+// Hours Used = staff count x block length, summed (only if all 4 staff counts are filled).
+// Returns {adc, hours}, either of which is null if that half of the breakdown isn't complete.
+function deriveFromBlocks(blocks){
+  const keys = SHIFT_BLOCKS.map(b=>b.key);
+  const allPts = keys.every(k => blocks[k] && blocks[k].pts!==null && blocks[k].pts!==undefined && !isNaN(blocks[k].pts));
+  const allStaff = keys.every(k => blocks[k] && blocks[k].staff!==null && blocks[k].staff!==undefined && !isNaN(blocks[k].staff));
+  let adc = null, hours = null;
+  if(allPts){
+    let sum = 0;
+    keys.forEach(k => sum += blocks[k].pts * BLOCK_HOURS[k]);
+    adc = Math.round((sum / 24) * 10) / 10;
+  }
+  if(allStaff){
+    let sum = 0;
+    keys.forEach(k => sum += blocks[k].staff * BLOCK_HOURS[k]);
+    hours = sum;
+  }
+  return {adc, hours};
+}
+
+function clearBlockInputs(){
+  SHIFT_BLOCKS.forEach(blk=>{
+    document.getElementById('dl_pts_'+blk.key).value = '';
+    document.getElementById('dl_staff_'+blk.key).value = '';
+  });
+}
+
+function updateLiveCalc(){
+  const blocks = readBlocksFromForm() || {};
+  const derived = deriveFromBlocks(blocks);
+  const target = DATA && DATA.targetHPPD ? DATA.targetHPPD : 9.71;
+  const actualHppd = (derived.adc!==null && derived.hours!==null && derived.adc>0) ? derived.hours/derived.adc : null;
+  document.getElementById('dl_calcADC').textContent = derived.adc!==null ? derived.adc.toFixed(1) : '—';
+  document.getElementById('dl_calcHours').textContent = derived.hours!==null ? derived.hours.toFixed(1) : '—';
+  document.getElementById('dl_calcHPPD').textContent = actualHppd!==null ? actualHppd.toFixed(2) : '—';
+  document.getElementById('dl_calcTarget').textContent = target.toFixed(2);
+  const variance = actualHppd!==null ? target - actualHppd : null;
+  document.getElementById('dl_calcVariance').textContent = variance!==null ? (variance>=0?'+':'') + variance.toFixed(2) : '—';
+}
+SHIFT_BLOCKS.forEach(blk=>{
+  document.getElementById('dl_pts_'+blk.key).addEventListener('input', updateLiveCalc);
+  document.getElementById('dl_staff_'+blk.key).addEventListener('input', updateLiveCalc);
+});
+
+function resetDailyForm(){
+  editingDaily = null;
+  document.getElementById('dl_date').value = '';
+  clearBlockInputs();
+  updateLiveCalc();
+  document.getElementById('dl_saveBtn').textContent = 'Add Day';
+  document.getElementById('dl_cancelBtn').style.display = 'none';
+}
+document.getElementById('dl_cancelBtn').addEventListener('click', resetDailyForm);
+document.getElementById('dl_saveBtn').addEventListener('click', async ()=>{
+  const date = document.getElementById('dl_date').value;
+  if(!date){ alert('Pick a date.'); return; }
+
+  const blocks = readBlocksFromForm();
+  const missing = [];
+  SHIFT_BLOCKS.forEach(blk=>{
+    const bl = (blocks||{})[blk.key] || {};
+    if(bl.pts===null || bl.pts===undefined || isNaN(bl.pts)) missing.push(blk.label + ' — Total Patients');
+    if(bl.staff===null || bl.staff===undefined || isNaN(bl.staff)) missing.push(blk.label + ' — Total Nurses + CAs');
+  });
+  if(missing.length){
+    alert('All four shift-breakdown rows are required. Missing:\n' + missing.join('\n'));
+    return;
+  }
+
+  const derived = deriveFromBlocks(blocks);
+  const adc = derived.adc, hoursUsed = derived.hours;
+
+  if(!DATA.dailyLog) DATA.dailyLog = [];
+  if(editingDaily){
+    const e = DATA.dailyLog.find(x=>x.id===editingDaily);
+    e.date=date; e.adc=adc; e.hoursUsed=hoursUsed; e.blocks=blocks;
+  } else {
+    const dup = DATA.dailyLog.find(x=>x.date===date);
+    if(dup && !confirm('A day is already logged for ' + fmt(date) + '. Overwrite it?')) return;
+    if(dup){ dup.adc=adc; dup.hoursUsed=hoursUsed; dup.blocks=blocks; }
+    else DATA.dailyLog.push({id:'dl'+Date.now(), date, adc, hoursUsed, blocks});
+  }
+  await saveData('dl_saveStatus');
+  resetDailyForm();
+  renderAll();
+});
+
+(async function init(){
+  await loadData();
+  renderWeekSelect();
+  document.getElementById('budgetedInput').value = DATA.budgetedFTE;
+  document.getElementById('censusInput').value = DATA.avgCensus;
+  document.getElementById('targetHppdInput').value = DATA.targetHPPD;
+  toggleContractField();
+  renderAll();
+  updateLiveCalc();
+  syncFromCC();
+})();
+</script>
+</body>
+</html>
