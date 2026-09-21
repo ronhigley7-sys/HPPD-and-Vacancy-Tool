@@ -421,46 +421,79 @@ function todayISO(){
   return TODAY.getFullYear()+'-'+String(TODAY.getMonth()+1).padStart(2,'0')+'-'+String(TODAY.getDate()).padStart(2,'0');
 }
 
+function normalizeCCRole(role){
+  const r = String(role || '').trim().toUpperCase();
+  if(r === 'RN' || r === 'LPN' || r === 'CA') return r;
+  if(r === 'CNA' || r === 'NA' || r === 'TECH' || r === 'PCT') return 'CA';
+  return r;
+}
+
+function normalizeCCShift(shift){
+  const s = String(shift || '').trim().toLowerCase();
+  if(!s) return 'day';
+  if(s.startsWith('n') || s.includes('night') || s.includes('1900') || s.includes('2230')) return 'night';
+  if(s.startsWith('e') || s.includes('eve') || s.includes('1430') || s.includes('1500')) return 'evening';
+  return 'day';
+}
+
+async function fetchCCRosterRows(){
+  const headers = { apikey: CC_KEY, Authorization: 'Bearer ' + CC_KEY };
+  const queries = [
+    // Detailed roster, when these optional fields exist.
+    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date&role=not.is.null',
+    // Command Center's known-good live sync shape.
+    '/rest/v1/employee_directory_roster?select=display_name,role,status&role=not.is.null',
+    '/rest/v1/employee_directory_roster?select=display_name,role,status'
+  ];
+  const failures = [];
+  for(const query of queries){
+    const res = await fetch(CC_URL + query, { headers });
+    if(res.ok) return await res.json();
+    failures.push(res.status);
+  }
+  throw new Error('CC request failed: ' + failures.join(' / '));
+}
+
 async function syncFromCC(){
   const btn = document.getElementById('syncCC');
   const sync = document.getElementById('syncStatus');
   btn.disabled = true;
-  btn.textContent = 'Syncing…';
+  btn.textContent = 'Syncing...';
   try{
-    const res = await fetch(CC_URL + '/rest/v1/employee_directory_roster?unit=eq.3B%2F3C&role=not.is.null&select=display_name,role,shift,hire_date,status,status_date', {
-      headers: { apikey: CC_KEY, Authorization: 'Bearer ' + CC_KEY }
-    });
-    if(!res.ok){ throw new Error('CC request failed: ' + res.status); }
-    const rows = await res.json();
+    const rows = await fetchCCRosterRows();
     let added = 0, dblCount = 0, termCount = 0, reactivated = 0;
     const roleArr = { RN: DATA.staff, CA: DATA.ca, LPN: DATA.lpn };
     rows.forEach(row=>{
-      const arr = roleArr[row.role];
-      if(!arr) return;
-      const existing = arr.find(p=>p.name.trim().toLowerCase() === (row.display_name||'').trim().toLowerCase());
+      const role = normalizeCCRole(row.role);
+      const arr = roleArr[role];
+      const name = (row.display_name || '').trim();
+      if(!arr || !name) return;
+      const status = String(row.status || 'active').trim().toLowerCase();
+      const existing = arr.find(p=>p.name.trim().toLowerCase() === name.toLowerCase());
       if(!existing){
-        if(row.status === 'terminated') return; // nothing to add
+        if(status === 'terminated') return; // nothing to add
         const rec = {
-          id: (row.role==='RN'?'s':row.role==='CA'?'c':'l') + '_cc_' + Date.now() + Math.floor(Math.random()*1000),
-          name: row.display_name,
-          shift: row.shift || 'day',
+          id: (role==='RN'?'s':role==='CA'?'c':'l') + '_cc_' + Date.now() + Math.floor(Math.random()*1000),
+          name,
+          shift: normalizeCCShift(row.shift),
           fte: 0.9,
-          start: row.hire_date || todayISO(),
+          start: row.hire_date || null,
           end: null,
           archived: false
         };
         if(!row.shift) rec.note = 'Shift not set in Command Center — confirm.';
-        if(row.status === 'dbl') rec.dblSince = row.status_date || todayISO();
+        if(!row.hire_date) rec.note = (rec.note ? rec.note + ' ' : '') + 'Hire date not set in Command Center.';
+        if(status === 'dbl') rec.dblSince = row.status_date || todayISO();
         arr.push(rec);
         added++;
-        if(row.status === 'dbl') dblCount++;
+        if(status === 'dbl') dblCount++;
       } else {
-        if(row.status === 'dbl'){
+        if(status === 'dbl'){
           if(!existing.dblSince){ existing.dblSince = row.status_date || todayISO(); dblCount++; }
         } else if(existing.dblSince){
           delete existing.dblSince; delete existing.dblUntil; reactivated++;
         }
-        if(row.status === 'terminated' && !existing.end){
+        if(status === 'terminated' && !existing.end){
           existing.end = row.status_date || todayISO();
           termCount++;
         }
