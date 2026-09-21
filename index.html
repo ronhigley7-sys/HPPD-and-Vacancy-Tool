@@ -436,12 +436,61 @@ function normalizeCCShift(shift){
   return 'day';
 }
 
+function cleanName(name){
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function rosterNameKey(name){
+  const cleaned = cleanName(name).replace(/[^a-z, ]/g, '');
+  const parts = cleaned.split(',');
+  if(parts.length >= 2){
+    const last = parts[0].trim();
+    const first = parts[1].trim().split(/\s+/)[0] || '';
+    return last + ',' + first;
+  }
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  return words.slice(0, 2).join(' ');
+}
+
+function findByCCName(arr, name){
+  const exact = cleanName(name);
+  const key = rosterNameKey(name);
+  return arr.find(p => cleanName(p.name) === exact || rosterNameKey(p.name) === key);
+}
+
+function getCCValue(map, name){
+  if(!map || !name) return undefined;
+  if(Object.prototype.hasOwnProperty.call(map, name)) return map[name];
+  const target = rosterNameKey(name);
+  const found = Object.keys(map).find(k => rosterNameKey(k) === target);
+  return found ? map[found] : undefined;
+}
+
+function parseCCJSON(value, fallback){
+  if(!value) return fallback;
+  if(typeof value === 'string'){
+    try{ return JSON.parse(value); }catch(e){ return fallback; }
+  }
+  return value;
+}
+
+async function fetchCCTrackerValue(key, headers){
+  const res = await fetch(CC_URL + '/rest/v1/tracker_state?key=eq.' + encodeURIComponent(key) + '&select=value', { headers });
+  if(!res.ok) throw new Error('tracker_state ' + key + ' failed: ' + res.status);
+  const rows = await res.json();
+  if(!rows || !rows.length) throw new Error('tracker_state ' + key + ' missing');
+  return parseCCJSON(rows[0].value, key === 'float_roster' ? [] : {});
+}
+
 async function fetchCCRosterRows(){
   const headers = { apikey: CC_KEY, Authorization: 'Bearer ' + CC_KEY };
   const queries = [
-    // Detailed roster, when these optional fields exist.
-    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date&role=not.is.null',
-    // Command Center's known-good live sync shape.
+    // Detailed roster, if this table/view is restored later.
+    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date,fte&role=not.is.null',
+    // Older CC live-sync shape.
     '/rest/v1/employee_directory_roster?select=display_name,role,status&role=not.is.null',
     '/rest/v1/employee_directory_roster?select=display_name,role,status'
   ];
@@ -451,6 +500,36 @@ async function fetchCCRosterRows(){
     if(res.ok) return await res.json();
     failures.push(res.status);
   }
+
+  try{
+    const roster = await fetchCCTrackerValue('float_roster', headers);
+    const appState = await fetchCCTrackerValue('app_state', headers);
+    const empShifts = appState.empShifts || {};
+    const empFTE = appState.empFTE || {};
+    const hireDates = appState.hireDates || {};
+    const removed = Array.isArray(appState.removedStaff) ? appState.removedStaff.map(rosterNameKey) : [];
+
+    if(!Array.isArray(roster)) throw new Error('float_roster is not an array');
+    return roster
+      .filter(item => item && (item.name || item.display_name))
+      .map(item => {
+        const name = item.display_name || item.name;
+        const status = removed.includes(rosterNameKey(name)) ? 'terminated' : (item.status || 'active');
+        return {
+          display_name: name,
+          role: item.role,
+          status,
+          shift: item.shift || getCCValue(empShifts, name) || '',
+          hire_date: item.hire_date || getCCValue(hireDates, name) || null,
+          status_date: item.status_date || null,
+          fte: item.fte !== undefined ? item.fte : getCCValue(empFTE, name),
+          source: 'tracker_state'
+        };
+      });
+  }catch(e){
+    failures.push(e.message);
+  }
+
   throw new Error('CC request failed: ' + failures.join(' / '));
 }
 
@@ -461,7 +540,7 @@ async function syncFromCC(){
   btn.textContent = 'Syncing...';
   try{
     const rows = await fetchCCRosterRows();
-    let added = 0, dblCount = 0, termCount = 0, reactivated = 0;
+    let added = 0, dblCount = 0, termCount = 0, reactivated = 0, updated = 0;
     const roleArr = { RN: DATA.staff, CA: DATA.ca, LPN: DATA.lpn };
     rows.forEach(row=>{
       const role = normalizeCCRole(row.role);
@@ -469,14 +548,15 @@ async function syncFromCC(){
       const name = (row.display_name || '').trim();
       if(!arr || !name) return;
       const status = String(row.status || 'active').trim().toLowerCase();
-      const existing = arr.find(p=>p.name.trim().toLowerCase() === name.toLowerCase());
+      const existing = findByCCName(arr, name);
       if(!existing){
         if(status === 'terminated') return; // nothing to add
+        const fteVal = Number(row.fte);
         const rec = {
           id: (role==='RN'?'s':role==='CA'?'c':'l') + '_cc_' + Date.now() + Math.floor(Math.random()*1000),
           name,
           shift: normalizeCCShift(row.shift),
-          fte: 0.9,
+          fte: Number.isFinite(fteVal) && fteVal > 0 ? fteVal : 0.9,
           start: row.hire_date || null,
           end: null,
           archived: false
@@ -488,6 +568,23 @@ async function syncFromCC(){
         added++;
         if(status === 'dbl') dblCount++;
       } else {
+        if(cleanName(existing.name) !== cleanName(name) && rosterNameKey(existing.name) === rosterNameKey(name)){
+          existing.name = name;
+          updated++;
+        }
+        if(row.shift && !existing.shift){
+          existing.shift = normalizeCCShift(row.shift);
+          updated++;
+        }
+        if(row.hire_date && !existing.start){
+          existing.start = row.hire_date;
+          updated++;
+        }
+        const fteVal = Number(row.fte);
+        if(Number.isFinite(fteVal) && fteVal > 0 && (existing.fte === undefined || existing.fte === null)){
+          existing.fte = fteVal;
+          updated++;
+        }
         if(status === 'dbl'){
           if(!existing.dblSince){ existing.dblSince = row.status_date || todayISO(); dblCount++; }
         } else if(existing.dblSince){
@@ -503,6 +600,7 @@ async function syncFromCC(){
     renderAll();
     const parts = [];
     if(added) parts.push(added + ' new hire(s) added');
+    if(updated) parts.push(updated + ' existing field(s) updated');
     if(dblCount) parts.push(dblCount + ' marked DBL');
     if(termCount) parts.push(termCount + ' marked terminated');
     if(reactivated) parts.push(reactivated + ' returned from DBL');
