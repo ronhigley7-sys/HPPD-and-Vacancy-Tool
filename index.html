@@ -487,22 +487,22 @@ async function fetchCCTrackerValue(key, headers){
   return parseCCJSON(rows[0].value, key === 'float_roster' ? [] : {});
 }
 
+
 async function fetchCCRosterRows(){
   const headers = { apikey: CC_KEY, Authorization: 'Bearer ' + CC_KEY };
-  const queries = [
-    // Detailed roster, if this table/view is restored later.
-    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date,fte,employment_type,employee_type,staff_type,worker_type,category,agency,is_agency,traveler,is_traveler&role=not.is.null',
-    // Older CC live-sync shape.
-    '/rest/v1/employee_directory_roster?select=display_name,role,status&role=not.is.null',
-    '/rest/v1/employee_directory_roster?select=display_name,role,status'
+  const detailedQueries = [
+    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date,fte,agency,is_agency,traveler,is_traveler&role=not.is.null',
+    '/rest/v1/employee_directory_roster?select=display_name,role,shift,hire_date,status,status_date,fte&role=not.is.null'
   ];
   const failures = [];
-  for(const query of queries){
+  for(const query of detailedQueries){
     const res = await fetch(CC_URL + query, { headers });
-    if(res.ok) return await res.json();
+    if(res.ok){
+      const rows = await res.json();
+      if(rows.some(r => r && r.shift)) return rows;
+    }
     failures.push(res.status);
   }
-
   try{
     const roster = await fetchCCTrackerValue('float_roster', headers);
     const appState = await fetchCCTrackerValue('app_state', headers);
@@ -510,186 +510,113 @@ async function fetchCCRosterRows(){
     const empFTE = appState.empFTE || {};
     const hireDates = appState.hireDates || {};
     const removed = Array.isArray(appState.removedStaff) ? appState.removedStaff.map(rosterNameKey) : [];
-
-    if(!Array.isArray(roster)) throw new Error('float_roster is not an array');
-    return roster
-      .filter(item => item && (item.name || item.display_name))
-      .map(item => {
-        const name = item.display_name || item.name;
-        const status = removed.includes(rosterNameKey(name)) ? 'terminated' : (item.status || 'active');
-        return {
-          display_name: name,
-          role: item.role,
-          status,
-          shift: item.shift || getCCValue(empShifts, name) || '',
-          hire_date: item.hire_date || getCCValue(hireDates, name) || null,
-          status_date: item.status_date || null,
-          fte: item.fte !== undefined ? item.fte : getCCValue(empFTE, name),
-          source: 'tracker_state'
-        };
+    const agencyNames = new Set();
+    ['agencyStaff','agencyRoster','agencyRNs','travelers','travelerRoster'].forEach(k=>{
+      const v = appState[k];
+      if(Array.isArray(v)) v.forEach(x=>{
+        const n = typeof x === 'string' ? x : (x && (x.name || x.display_name));
+        if(n) agencyNames.add(rosterNameKey(n));
       });
-  }catch(e){
-    failures.push(e.message);
-  }
-
+      else if(v && typeof v === 'object') Object.keys(v).forEach(n=>{
+        const val = v[n];
+        if(val === true || val === 1 || String(val).toLowerCase()==='true') agencyNames.add(rosterNameKey(n));
+      });
+    });
+    if(!Array.isArray(roster)) throw new Error('float_roster is not an array');
+    return roster.filter(item => item && (item.name || item.display_name)).map(item => {
+      const name = item.display_name || item.name;
+      const status = removed.includes(rosterNameKey(name)) ? 'terminated' : (item.status || 'active');
+      const agency = isAgencyCCRow(item) || agencyNames.has(rosterNameKey(name));
+      return {display_name:name,role:item.role,status,shift:item.shift || getCCValue(empShifts,name) || '',
+        hire_date:item.hire_date || getCCValue(hireDates,name) || null,status_date:item.status_date || null,
+        fte:item.fte !== undefined ? item.fte : getCCValue(empFTE,name),agency,source:'tracker_state'};
+    });
+  }catch(e){ failures.push(e.message); }
   throw new Error('CC request failed: ' + failures.join(' / '));
 }
 
-
 function isAgencyCCRow(row){
-  // Accept the common agency/traveler fields if CC exposes them.
-  const vals = [
-    row && row.employment_type, row && row.employee_type, row && row.staff_type,
-    row && row.worker_type, row && row.category, row && row.agency,
-    row && row.is_agency, row && row.traveler, row && row.is_traveler
-  ];
-  return vals.some(v=>{
-    if(v === true || v === 1) return true;
-    const s = String(v == null ? '' : v).trim().toLowerCase();
-    return s === 'true' || s === 'yes' || s === 'y' || s === '1' ||
-           s.includes('agency') || s.includes('traveler') || s.includes('travel');
-  });
+  const vals=[row&&row.employment_type,row&&row.employee_type,row&&row.staff_type,row&&row.worker_type,row&&row.category,
+    row&&row.agency,row&&row.is_agency,row&&row.traveler,row&&row.is_traveler];
+  return vals.some(v=>{ if(v===true||v===1)return true; const s=String(v==null?'':v).trim().toLowerCase();
+    return s==='true'||s==='yes'||s==='y'||s==='1'||s.includes('agency')||s.includes('traveler')||s.includes('travel'); });
 }
-
-function isSyncExcluded(name, role){
-  const key = rosterNameKey(name);
-  return (DATA.syncExclusions || []).some(x =>
-    rosterNameKey(x.name || '') === key &&
-    (!x.role || normalizeCCRole(x.role) === normalizeCCRole(role))
-  );
+function isSyncExcluded(name,role){
+  const key=rosterNameKey(name);
+  return (DATA.syncExclusions||[]).some(x=>rosterNameKey(x.name||'')===key&&(!x.role||normalizeCCRole(x.role)===normalizeCCRole(role)));
 }
-
-function addSyncExclusion(name, role){
-  if(!name) return;
-  if(!DATA.syncExclusions) DATA.syncExclusions = [];
-  if(!isSyncExcluded(name, role)){
-    DATA.syncExclusions.push({name, role: normalizeCCRole(role), deletedAt: new Date().toISOString()});
-  }
+function addSyncExclusion(name,role){
+  if(!name)return; if(!DATA.syncExclusions)DATA.syncExclusions=[];
+  if(!isSyncExcluded(name,role))DATA.syncExclusions.push({name,role:normalizeCCRole(role),deletedAt:new Date().toISOString()});
 }
-
-function moveRNToCorrectBucket(name, agency){
-  const from = agency ? DATA.staff : DATA.travelers;
-  const to = agency ? DATA.travelers : DATA.staff;
-  const existing = findByCCName(from, name);
-  if(!existing) return null;
-  const idx = from.indexOf(existing);
-  if(idx >= 0) from.splice(idx,1);
-  existing.id = (agency ? 't' : 's') + '_cc_' + Date.now() + Math.floor(Math.random()*1000);
-  existing.archived = false;
-  if(agency){
-    if(existing.preceptor === undefined) existing.preceptor = '';
-    if(existing.contract === undefined) existing.contract = '';
-  } else {
-    delete existing.preceptor;
-    delete existing.contract;
-  }
-  to.push(existing);
-  return existing;
+function moveRNToCorrectBucket(name,agency){
+  const from=agency?DATA.staff:DATA.travelers,to=agency?DATA.travelers:DATA.staff;
+  const existing=findByCCName(from,name); if(!existing)return null;
+  const idx=from.indexOf(existing); if(idx>=0)from.splice(idx,1);
+  existing.id=(agency?'t':'s')+'_cc_'+Date.now()+Math.floor(Math.random()*1000); existing.archived=false;
+  if(agency){if(existing.preceptor===undefined)existing.preceptor='';if(existing.contract===undefined)existing.contract='';}
+  else{delete existing.preceptor;delete existing.contract;} to.push(existing); return existing;
 }
 
 async function syncFromCC(){
-  const btn = document.getElementById('syncCC');
-  const sync = document.getElementById('syncStatus');
-  btn.disabled = true;
-  btn.textContent = 'Syncing...';
+  const btn=document.getElementById('syncCC'),sync=document.getElementById('syncStatus');
+  btn.disabled=true;btn.textContent='Syncing...';
   try{
-    const rows = await fetchCCRosterRows();
-    let added = 0, dblCount = 0, termCount = 0, reactivated = 0, updated = 0, moved = 0, skipped = 0;
-
+    const rows=await fetchCCRosterRows();
+    let added=0,dblCount=0,termCount=0,reactivated=0,updated=0,moved=0,skipped=0;
+    const travelerKeys=new Set((DATA.travelers||[]).map(p=>rosterNameKey(p.name)));
+    const beforeStaff=DATA.staff.length;
+    DATA.staff=DATA.staff.filter(p=>!travelerKeys.has(rosterNameKey(p.name)));
+    moved+=beforeStaff-DATA.staff.length;
     rows.forEach(row=>{
-      const role = normalizeCCRole(row.role);
-      const name = (row.display_name || '').trim();
-      if(!name || !['RN','CA','LPN'].includes(role)) return;
-
-      // A manual deletion is intentional: do not recreate it on future CC syncs.
-      if(isSyncExcluded(name, role)){ skipped++; return; }
-
-      const status = String(row.status || 'active').trim().toLowerCase();
-      const agency = role === 'RN' && isAgencyCCRow(row);
-
+      const role=normalizeCCRole(row.role),name=(row.display_name||'').trim();
+      if(!name||!['RN','CA','LPN'].includes(role))return;
+      if(isSyncExcluded(name,role)){skipped++;return;}
+      const status=String(row.status||'active').trim().toLowerCase();
+      const alreadyTraveler=role==='RN'&&!!findByCCName(DATA.travelers,name);
+      const agency=role==='RN'&&(isAgencyCCRow(row)||alreadyTraveler);
       let arr;
-      if(role === 'RN'){
-        // Correct old misclassification before doing any other updates.
-        let existingStaff = findByCCName(DATA.staff, name);
-        let existingTraveler = findByCCName(DATA.travelers, name);
-        if(agency && existingStaff && !existingTraveler){
-          moveRNToCorrectBucket(name, true); moved++;
-        } else if(!agency && existingTraveler && !existingStaff && existingTraveler.ccSynced){
-          moveRNToCorrectBucket(name, false); moved++;
+      if(role==='RN'){
+        let es=findByCCName(DATA.staff,name),et=findByCCName(DATA.travelers,name);
+        if(agency){
+          if(et&&es){const i=DATA.staff.indexOf(es);if(i>=0)DATA.staff.splice(i,1);moved++;}
+          else if(es&&!et){moveRNToCorrectBucket(name,true);moved++;}
+          arr=DATA.travelers;
+        }else{
+          if(et&&!es&&et.ccSynced){moveRNToCorrectBucket(name,false);moved++;}
+          arr=DATA.staff;
         }
-        arr = agency ? DATA.travelers : DATA.staff;
-      } else {
-        arr = role === 'CA' ? DATA.ca : DATA.lpn;
-      }
-
-      let existing = findByCCName(arr, name);
+      }else arr=role==='CA'?DATA.ca:DATA.lpn;
+      let existing=findByCCName(arr,name);
       if(!existing){
-        if(status === 'terminated') return;
-        const fteVal = Number(row.fte);
-        const rec = {
-          id: (role==='RN'?(agency?'t':'s'):role==='CA'?'c':'l') + '_cc_' + Date.now() + Math.floor(Math.random()*1000),
-          name,
-          shift: normalizeCCShift(row.shift),
-          fte: Number.isFinite(fteVal) && fteVal > 0 ? fteVal : 0.9,
-          start: row.hire_date || null,
-          end: null,
-          archived: false,
-          ccSynced: true
-        };
-        if(agency){ rec.contract = ''; rec.preceptor = ''; }
-        if(!row.shift) rec.note = 'Shift not set in Command Center — confirm.';
-        if(!row.hire_date) rec.note = (rec.note ? rec.note + ' ' : '') + 'Hire date not set in Command Center.';
-        if(status === 'dbl') rec.dblSince = row.status_date || todayISO();
-        arr.push(rec);
-        added++;
-        if(status === 'dbl') dblCount++;
-      } else {
-        existing.ccSynced = true;
-        if(cleanName(existing.name) !== cleanName(name) && rosterNameKey(existing.name) === rosterNameKey(name)){
-          existing.name = name; updated++;
-        }
-
-        // CC is authoritative for a populated shift. This fixes night agency RNs
-        // that had previously been left/defaulted on day shift.
-        if(row.shift){
-          const ccShift = normalizeCCShift(row.shift);
-          if(existing.shift !== ccShift){ existing.shift = ccShift; updated++; }
-        }
-
-        if(row.hire_date && !existing.start){ existing.start = row.hire_date; updated++; }
-
-        const fteVal = Number(row.fte);
-        if(Number.isFinite(fteVal) && fteVal > 0 && existing.fte !== fteVal){
-          existing.fte = fteVal; updated++;
-        }
-
-        if(status === 'dbl'){
-          if(!existing.dblSince){ existing.dblSince = row.status_date || todayISO(); dblCount++; }
-        } else if(existing.dblSince){
-          delete existing.dblSince; delete existing.dblUntil; reactivated++;
-        }
-        if(status === 'terminated' && !existing.end){
-          existing.end = row.status_date || todayISO(); termCount++;
-        }
+        if(status==='terminated')return;
+        const fv=Number(row.fte);
+        const rec={id:(role==='RN'?(agency?'t':'s'):role==='CA'?'c':'l')+'_cc_'+Date.now()+Math.floor(Math.random()*1000),
+          name,shift:normalizeCCShift(row.shift),fte:Number.isFinite(fv)&&fv>0?fv:0.9,start:row.hire_date||null,end:null,archived:false,ccSynced:true};
+        if(agency){rec.contract='';rec.preceptor='';}
+        if(!row.shift)rec.note='Shift not set in Command Center — confirm.';
+        if(!row.hire_date)rec.note=(rec.note?rec.note+' ':'')+'Hire date not set in Command Center.';
+        if(status==='dbl')rec.dblSince=row.status_date||todayISO();
+        arr.push(rec);added++;if(status==='dbl')dblCount++;
+      }else{
+        existing.ccSynced=true;
+        if(cleanName(existing.name)!==cleanName(name)&&rosterNameKey(existing.name)===rosterNameKey(name)){existing.name=name;updated++;}
+        if(row.shift){const sh=normalizeCCShift(row.shift);if(existing.shift!==sh){existing.shift=sh;updated++;}}
+        if(row.hire_date&&!existing.start){existing.start=row.hire_date;updated++;}
+        const fv=Number(row.fte);if(Number.isFinite(fv)&&fv>0&&existing.fte!==fv){existing.fte=fv;updated++;}
+        if(status==='dbl'){if(!existing.dblSince){existing.dblSince=row.status_date||todayISO();dblCount++;}}
+        else if(existing.dblSince){delete existing.dblSince;delete existing.dblUntil;reactivated++;}
+        if(status==='terminated'&&!existing.end){existing.end=row.status_date||todayISO();termCount++;}
       }
     });
-
-    await saveData('saveStatus');
-    renderAll();
-    const parts = [];
-    if(added) parts.push(added + ' new hire(s) added');
-    if(moved) parts.push(moved + ' RN(s) corrected staff/agency');
-    if(updated) parts.push(updated + ' existing field(s) updated');
-    if(dblCount) parts.push(dblCount + ' marked DBL');
-    if(termCount) parts.push(termCount + ' marked terminated');
-    if(reactivated) parts.push(reactivated + ' returned from DBL');
-    if(skipped) parts.push(skipped + ' deleted record(s) kept excluded');
-    sync.textContent = parts.length ? 'Synced from CC: ' + parts.join(', ') : 'Synced from CC: no changes';
-  }catch(e){
-    sync.textContent = 'CC sync failed — ' + e.message;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Sync from Command Center';
+    await saveData('saveStatus');renderAll();
+    const parts=[];if(added)parts.push(added+' new hire(s) added');if(moved)parts.push(moved+' RN(s) corrected staff/agency');
+    if(updated)parts.push(updated+' existing field(s) updated');if(dblCount)parts.push(dblCount+' marked DBL');
+    if(termCount)parts.push(termCount+' marked terminated');if(reactivated)parts.push(reactivated+' returned from DBL');
+    if(skipped)parts.push(skipped+' deleted record(s) kept excluded');
+    sync.textContent=parts.length?'Synced from CC: '+parts.join(', '):'Synced from CC: no changes';
+  }catch(e){sync.textContent='CC sync failed — '+e.message;}
+  btn.disabled=false;btn.textContent='Sync from Command Center';
 }
 
 // kind: 'staff' | 'traveler' | 'ca' | 'lpn'. Only travelers get orientation-week logic
